@@ -1,5 +1,5 @@
 import slack, boto3, json, requests
-from chalice import Chalice, Rate, Cron
+from chalice import Chalice, Rate, Cron, UnauthorizedError
 from chalicelib import config, utils
 
 app = Chalice(app_name='stockbot')
@@ -13,6 +13,8 @@ watchlist_table = db.Table('watchlist')
 def index():
     r = utils.parse_request(app.current_request)
 
+    if r['token'] != config.SLACK_VERIFICATION_TOKEN:
+        raise UnauthorizedError("You are not authorized to use this application")
     response = COMMANDS[r['command']](r)
 
     return response
@@ -77,7 +79,7 @@ def unwatch(request):
 
 @app.schedule(Cron(30, 13, '?', '*', 'MON-FRI', '*'))
 def market_open(event):
-    client = slack.WebClient(token=config.SLACK_TOKEN)
+    client = slack.WebClient(token=config.SLACK_API_TOKEN)
 
     for symbol in config.SCHEDULED_SYMBOLS:
         quote = utils.get_quote(symbol)   
@@ -88,7 +90,7 @@ def market_open(event):
 
 @app.schedule(Rate(30, unit=Rate.MINUTES))
 def watchlist(request):
-    client = slack.WebClient(token=config.SLACK_TOKEN)
+    client = slack.WebClient(token=config.SLACK_API_TOKEN)
 
     watchlist = watchlist_table.scan()
 
@@ -103,9 +105,6 @@ def watchlist(request):
     return {
         'success': True
     }
-
-
-
 
 
 COMMANDS = {
